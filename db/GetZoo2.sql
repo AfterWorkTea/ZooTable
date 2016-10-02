@@ -1,0 +1,57 @@
+use zoodb;
+
+DROP FUNCTION IF EXISTS GetZoo2;
+DELIMITER $$
+
+CREATE FUNCTION GetZoo2(v_sort char(1)) RETURNS Text CHARSET utf8
+    DETERMINISTIC
+    COMMENT 'Zoo animals (2)'
+BEGIN
+  DECLARE res TEXT CHARSET utf8;
+  DECLARE v_name VARCHAR(50) CHARSET utf8;
+  DECLARE v_group_name VARCHAR(50) CHARSET utf8;
+  DECLARE v_count INT UNSIGNED;
+  DECLARE done INT DEFAULT FALSE;
+  DECLARE cursorZooN CURSOR FOR 
+      select l.name, l.count, g.name from list l join `group` g on g.id = l.group_id order by l.name, g.name, l.count;
+  DECLARE cursorZooG CURSOR FOR 
+      select l.name, l.count, g.name from list l join `group` g on g.id = l.group_id order by g.name, l.name, l.count;
+  DECLARE cursorZooC CURSOR FOR 
+      select l.name, l.count, g.name from list l join `group` g on g.id = l.group_id order by l.count, l.name, g.name;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+  IF v_sort is NULL then
+     SET v_sort = 'N';
+  END IF;
+  Set v_sort = Upper(v_sort);
+  IF FIND_IN_SET(v_sort, 'N,G,C') = 0 Then
+    SET v_sort = 'N';
+  END IF;
+  Set res = Concat('<zoo>\n');
+  CASE v_sort
+     WHEN 'N' THEN OPEN cursorZooN;
+     WHEN 'G' THEN OPEN cursorZooG;
+     WHEN 'C' THEN OPEN cursorZooC;     
+  END CASE;
+  read_loop: LOOP
+	CASE v_sort
+       WHEN 'N' THEN FETCH cursorZooN INTO v_name, v_count, v_group_name;
+       WHEN 'G' THEN FETCH cursorZooG INTO v_name, v_count, v_group_name;
+       WHEN 'C' THEN FETCH cursorZooC INTO v_name, v_count, v_group_name;
+	END CASE;
+    IF done THEN
+      LEAVE read_loop;
+    END IF;
+    SET res = Concat(res, '<animal count="', v_count, '" group="', v_group_name, '">', v_name, '</animal>\n');
+  END LOOP;
+  CASE v_sort
+     WHEN 'N' THEN CLOSE cursorZooN;
+     WHEN 'G' THEN CLOSE cursorZooG;
+     WHEN 'C' THEN CLOSE cursorZooC;     
+  END CASE;
+  Set res = Concat(res, '</zoo>');
+  RETURN(res);
+END;
+
+$$
+
+DELIMITER ;
